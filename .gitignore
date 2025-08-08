@@ -1,97 +1,98 @@
-# Ignore everything inside GraphtreonAudit/ that should not be tracked
-GraphtreonAudit/__pycache__/
-GraphtreonAudit/*.py[cod]
-GraphtreonAudit/*$py.class
+# Ignore everything inside graphtreon-audit-proj/ that should not be tracked
+graphtreon-audit-proj/__pycache__/
+graphtreon-audit-proj/*.py[cod]
+graphtreon-audit-proj/*$py.class
 
 # C extensions
-GraphtreonAudit/*.so
+graphtreon-audit-proj/*.so
 
 # Distribution / packaging
-GraphtreonAudit/.Python
-GraphtreonAudit/build/
-GraphtreonAudit/develop-eggs/
-GraphtreonAudit/dist/
-GraphtreonAudit/downloads/
-GraphtreonAudit/eggs/
-GraphtreonAudit/.eggs/
-GraphtreonAudit/lib/
-GraphtreonAudit/lib64/
-GraphtreonAudit/parts/
-GraphtreonAudit/sdist/
-GraphtreonAudit/var/
-GraphtreonAudit/wheels/
-GraphtreonAudit/share/python-wheels/
-GraphtreonAudit/*.egg-info/
-GraphtreonAudit/.installed.cfg
-GraphtreonAudit/*.egg
-GraphtreonAudit/MANIFEST
+graphtreon-audit-proj/.Python
+graphtreon-audit-proj/build/
+graphtreon-audit-proj/develop-eggs/
+graphtreon-audit-proj/dist/
+graphtreon-audit-proj/downloads/
+graphtreon-audit-proj/eggs/
+graphtreon-audit-proj/.eggs/
+graphtreon-audit-proj/lib/
+graphtreon-audit-proj/lib64/
+graphtreon-audit-proj/parts/
+graphtreon-audit-proj/sdist/
+graphtreon-audit-proj/var/
+graphtreon-audit-proj/wheels/
+graphtreon-audit-proj/share/python-wheels/
+graphtreon-audit-proj/*.egg-info/
+graphtreon-audit-proj/.installed.cfg
+graphtreon-audit-proj/*.egg
+graphtreon-audit-proj/MANIFEST
 
 # PyInstaller
-GraphtreonAudit/*.manifest
-GraphtreonAudit/*.spec
+graphtreon-audit-proj/*.manifest
+graphtreon-audit-proj/*.spec
 
 # Installer logs
-GraphtreonAudit/pip-log.txt
-GraphtreonAudit/pip-delete-this-directory.txt
+graphtreon-audit-proj/pip-log.txt
+graphtreon-audit-proj/pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-GraphtreonAudit/htmlcov/
-GraphtreonAudit/.tox/
-GraphtreonAudit/.nox/
-GraphtreonAudit/.coverage
-GraphtreonAudit/.coverage.*
-GraphtreonAudit/.cache
-GraphtreonAudit/nosetests.xml
-GraphtreonAudit/coverage.xml
-GraphtreonAudit/*.cover
-GraphtreonAudit/*.py,cover
-GraphtreonAudit/.hypothesis/
-GraphtreonAudit/.pytest_cache/
-GraphtreonAudit/cover/
+graphtreon-audit-proj/htmlcov/
+graphtreon-audit-proj/.tox/
+graphtreon-audit-proj/.nox/
+graphtreon-audit-proj/.coverage
+graphtreon-audit-proj/.coverage.*
+graphtreon-audit-proj/.cache
+graphtreon-audit-proj/nosetests.xml
+graphtreon-audit-proj/coverage.xml
+graphtreon-audit-proj/*.cover
+graphtreon-audit-proj/*.py,cover
+graphtreon-audit-proj/.hypothesis/
+graphtreon-audit-proj/.pytest_cache/
+graphtreon-audit-proj/cover/
 
 # Translations
-GraphtreonAudit/*.mo
-GraphtreonAudit/*.pot
+graphtreon-audit-proj/*.mo
+graphtreon-audit-proj/*.pot
 
 # Django stuff:
-GraphtreonAudit/*.log
-GraphtreonAudit/local_settings.py
-GraphtreonAudit/db.sqlite3
-GraphtreonAudit/db.sqlite3-journal
+graphtreon-audit-proj/*.log
+graphtreon-audit-proj/local_settings.py
+graphtreon-audit-proj/db.sqlite3
+graphtreon-audit-proj/db.sqlite3-journal
 
 # Flask stuff:
-GraphtreonAudit/instance/
-GraphtreonAudit/.webassets-cache
+graphtreon-audit-proj/instance/
+graphtreon-audit-proj/.webassets-cache
 
 # Scrapy stuff:
-GraphtreonAudit/.scrapy
+graphtreon-audit-proj/.scrapy
 
 # Sphinx documentation
-GraphtreonAudit/docs/_build/
+graphtreon-audit-proj/docs/_build/
 
 # PyBuilder
-GraphtreonAudit/.pybuilder/
-GraphtreonAudit/target/
+graphtreon-audit-proj/.pybuilder/
+graphtreon-audit-proj/target/
 
 # Jupyter Notebook
-GraphtreonAudit/.ipynb_checkpoints
+graphtreon-audit-proj/.ipynb_checkpoints
 
 # IPython
-GraphtreonAudit/profile_default/
-GraphtreonAudit/ipython_config.py
+graphtreon-audit-proj/profile_default/
+graphtreon-audit-proj/ipython_config.py
 
 # pyenv
-GraphtreonAudit/.python-version
+graphtreon-audit-proj/.python-version
 
 # pipenv
-# GraphtreonAudit/Pipfile.lock
+# graphtreon-audit-proj/Pipfile.lock
 
 # poetry
-# GraphtreonAudit/poetry.lock
+# graphtreon-audit-proj/poetry.lock
 
 # pdm
-GraphtreonAudit/.pdm.toml
-GraphtreonAudit/.pdm-python
-GraphtreonAudit/.pdm-build/
+graphtreon-audit-proj/.pdm.toml
+graphtreon-audit-proj/.pdm-python
+graphtreon-audit-proj/.pdm-build/
 
-GraphtreonAudit/test_08082025.txt
+graphtreon-audit-proj/test_08082025.txt
+graphtreon-audit-proj/test_08082025.txt
