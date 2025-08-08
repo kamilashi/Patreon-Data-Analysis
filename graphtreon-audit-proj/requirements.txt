@@ -1,0 +1,5 @@
+pandas
+numpy
+matplotlib
+cloudscraper
+bs4
