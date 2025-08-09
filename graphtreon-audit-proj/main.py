@@ -14,7 +14,7 @@ START_DATE = pd.to_datetime("2022-07-01")
 END_DATE = pd.to_datetime("2024-05-01")
 
 releases = []
-with open("releases.json", "r") as f:
+with open("releases_lt.json", "r") as f:
     releases = json.load(f)
 
 releases_df = pd.DataFrame(releases, columns=["version", "date", "price"])
@@ -62,25 +62,44 @@ lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 
 # global trend
 global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
-patrons_detrended = patrons_and_earnings_df['paid_members'] - global_trend
+patrons_and_earnings_df["detrended"] = patrons_and_earnings_df['paid_members'] #- global_trend
+patrons_detrended = patrons_and_earnings_df["detrended"] 
 
-
-# montly dips
+# remove montly dips
 monthly_dip_window = 30
 patrons_denoised = grey_closing(patrons_detrended, size=monthly_dip_window)
 
 # peaks
 peak_width = 4
 peaks_idx_raw,_ = sig.find_peaks(patrons_denoised, width = peak_width)  
-
 peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idx_raw]
 print(peak_dates)
+
+# monthly churn
+patrons_payers = []
+monthly_churn = []
+prev_month_payers = 0
+patrons_by_month = patrons_and_earnings_df.groupby("month")
+
+for month, group in patrons_by_month:
+    payers = max(group["detrended"].iloc[0], group["detrended"].iloc[-1])
+    churn_rate = ((prev_month_payers - payers) / prev_month_payers) * 100
+    monthly_churn.append([month, churn_rate])
+    patrons_payers.extend([payers] * len(group))
+    prev_month_payers = payers
+
+monthly_stats_df = pd.DataFrame(monthly_churn, columns=["month", "churn rate (%)"])
+print(monthly_stats_df)
 
 # slice up the data into inter-release segments
 starts = peaks_idx_raw[:-1]
 ends   = np.r_[starts[1:], peaks_idx_raw[len(peaks_idx_raw) - 1]]  
+idle_periods = ends - starts
 
-patrons_segments = [patrons_denoised[s:e] for s, e in zip(starts, ends)]
+patrons_segments = [patrons_payers[s:e] for s, e in zip(starts, ends)]
+
+#for segment in patrons_segments:
+
 
 domain_length = patrons_and_earnings_df["date"].size
 
@@ -88,8 +107,6 @@ min_patrons = patrons_detrended.min()
 max_patrons = patrons_detrended.max()
 
 print("Length: " + str(domain_length))
-#print("Peaks in subs " + time_context + ":")
-#print(peak_dates)
 
 figureNo = 1
 
@@ -111,15 +128,14 @@ price_colors = ['orange', 'red']
 
 plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], patrons_detrended, label='detrended', color='blue')
-plt.plot(patrons_and_earnings_df["date"], patrons_denoised, label='de-noised, upper envelope', color='orange')
-#plt.plot(patrons_and_earnings_df["date"], patrons_peaks, label='smoothed peaks', color='orange')
+plt.plot(patrons_and_earnings_df["date"], patrons_payers, label='payees', color='orange')
 plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'green', linestyle='--', label = 'peaks')
 
-release_by_price = releases_df.groupby("price")
-color_idx = 0
-for price, group in release_by_price:
-    plt.vlines(x = group["date"], ymin = min_patrons, ymax = max_patrons, color = price_colors[color_idx], linestyle=':', label = str(price) + '$ release')
-    color_idx += 1
+# release_by_price = releases_df.groupby("price")
+# color_idx = 0
+# for price, group in release_by_price:
+#     plt.vlines(x = group["date"], ymin = min_patrons, ymax = max_patrons, color = price_colors[color_idx], linestyle=':', label = str(price) + '$ release')
+#     color_idx += 1
     
 plt.xlabel('date')
 plt.ylabel('paid members')
@@ -133,13 +149,12 @@ n_cols = math.ceil(math.sqrt(n_segments))
 n_rows = math.ceil(n_segments / n_cols)
 subplot_no = 0
 
-
 for segment in patrons_segments:
     index = subplot_no
     subplot_no += 1
     plt.subplot(n_rows, n_cols, subplot_no)
     plt.plot(patrons_and_earnings_df["date"].iloc[starts[index] : ends[index]], segment)
-    plt.title('Idle window of ' + str(ends[index] - starts[index]) + " days")
+    plt.title('Idle window of ' + str(idle_periods[index]) + " days")
     plt.xticks(rotation=90, fontweight='light',  fontsize='x-small')
 
 plt.subplots_adjust(hspace= 0.25 * n_rows)
