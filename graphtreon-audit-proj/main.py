@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import find_peaks_cwt, detrend
+import scipy.signal as sig
 import cloudscraper, re, json
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
-LASTNDAYS = 0 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
+LASTNDAYS = 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
 
 scraper = cloudscraper.create_scraper()     
 html     = scraper.get(URL, timeout=30).text
@@ -29,13 +29,25 @@ if LASTNDAYS > 0:
     patrons_and_earnings_df = patrons_and_earnings_df.tail(LASTNDAYS)
     time_context = "the last " + str(LASTNDAYS) + " days"
 
+# put the cutoff-frequency somewhere very low for the global trend
+global_fc_norm = (1 / (365 / 0.5)) / (0.5) 
+print("Global cutoff freq: " + str(global_fc_norm))
+lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 
-#smooth_patrons = detrend(patrons_and_earnings_df["paid_members"])
-trend_90d = patrons_and_earnings_df['paid_members'].rolling(window=90, center=False, min_periods=1).mean()
-smooth_patrons = patrons_and_earnings_df['paid_members'] - trend_90d
-smooth_patrons = smooth_patrons.rolling(window=30, center=True, min_periods=1).median()
+# global trend
+global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
+patrons_detrended = patrons_and_earnings_df['paid_members'] - global_trend
 
-sub_peaks_idx = find_peaks_cwt(smooth_patrons, widths=range(20,40), min_snr=0.3)      # tweak prominence / distance / height
+
+seasonal_fc_norm = (1 / (35)) / (0.5) # monthly dips happen every 30 days, so we plug that into our new cutoff-frequency
+print("Seasonal cutoff freq: " + str(seasonal_fc_norm))
+lp_b, lp_a = sig.cheby2(N=6, rs=40, Wn = seasonal_fc_norm)
+
+# montly dips
+patrons_residual = sig.filtfilt(lp_b, lp_a, patrons_detrended)
+
+
+sub_peaks_idx = sig.find_peaks_cwt(patrons_detrended, widths=range(20,40), min_snr=0.3)      
 sub_peaks_series = patrons_and_earnings_df["date"].iloc[sub_peaks_idx]
 
 domain_length = patrons_and_earnings_df["date"].size
@@ -44,7 +56,6 @@ peak_freq = domain_length / sub_peaks_series.size
 print("Length: " + str(domain_length))
 print("Peaks in subs " + time_context + ":")
 print(sub_peaks_series)
-print("Ave yearly peak freq: " + time_context + ":")
 
 
 
@@ -58,17 +69,24 @@ plt.title('Daily patron counts in ' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], trend_90d)
+plt.plot(patrons_and_earnings_df["date"], global_trend)
 plt.xlabel('date')
 plt.ylabel('paid members')
 plt.title('Daily patron counts (global trend) in ' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], smooth_patrons)
+plt.plot(patrons_and_earnings_df["date"], patrons_detrended)
 plt.xlabel('date')
 plt.ylabel('paid members')
 plt.title('Daily patron counts (detrended) in ' + time_context)
+figureNo += 1
+
+plt.figure(figureNo)
+plt.plot(patrons_and_earnings_df["date"], patrons_residual)
+plt.xlabel('date')
+plt.ylabel('paid members')
+plt.title('Daily patron counts (residual) in ' + time_context)
 figureNo += 1
 
 # patrons_and_earnings_df = patrons_and_earnings_df.set_index('date')
