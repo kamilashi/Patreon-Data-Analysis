@@ -2,11 +2,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
+from scipy.ndimage import grey_closing
 import cloudscraper, re, json
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
-LASTNDAYS = 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
+LASTNDAYS = 2 * 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
 
 scraper = cloudscraper.create_scraper()     
 html     = scraper.get(URL, timeout=30).text
@@ -38,26 +39,54 @@ lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
 patrons_detrended = patrons_and_earnings_df['paid_members'] - global_trend
 
+# montly dips
+monthly_dip_window = 30
+patrons_denoised = grey_closing(patrons_detrended, size=monthly_dip_window)
+
+# peaks
+peak_width = 4
+peaks_idx_raw,_ = sig.find_peaks(patrons_denoised, width = peak_width)  
+
+peaks_idx = []
+peak_no = 0
 
 seasonal_fc_norm = (1 / (35)) / (0.5) # monthly dips happen every 30 days, so we plug that into our new cutoff-frequency
 print("Seasonal cutoff freq: " + str(seasonal_fc_norm))
 lp_b, lp_a = sig.cheby2(N=6, rs=40, Wn = seasonal_fc_norm)
 
-# montly dips
-patrons_residual = sig.filtfilt(lp_b, lp_a, patrons_detrended)
+patrons_peaks = sig.filtfilt(lp_b, lp_a, patrons_denoised)
 
+def get_slope(center, radius, data):
+    left = center - radius
+    right = center + radius 
+    slope = (data[right] - data[left]) / (right - left)
+    return slope
 
-sub_peaks_idx = sig.find_peaks_cwt(patrons_detrended, widths=range(20,40), min_snr=0.3)      
-sub_peaks_series = patrons_and_earnings_df["date"].iloc[sub_peaks_idx]
+# potentially filter out start and end maxima and any stray ones in between
+for peak_idx in peaks_idx_raw:
+    peak_no += 1
+    zero_slope_thrs = 0.1
+
+    radius = int(peak_width / 2) 
+    left = peak_idx - radius
+    right = peak_idx + radius
+
+    left_slope = get_slope(left, 1, patrons_peaks)
+    right_slope = get_slope(right, 1, patrons_peaks)
+    print("slopes around peak # " + str(peak_no) + ": " + str(left_slope) + " : " + str(right_slope))
+    if np.sign(left_slope) != np.sign(right_slope):
+        peaks_idx.append(peak_idx)
+
+peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idx_raw]
 
 domain_length = patrons_and_earnings_df["date"].size
-peak_freq = domain_length / sub_peaks_series.size
+
+min_patrons = patrons_detrended.min()
+max_patrons = patrons_detrended.max()
 
 print("Length: " + str(domain_length))
 print("Peaks in subs " + time_context + ":")
-print(sub_peaks_series)
-
-
+print(peak_dates)
 
 figureNo = 1
 
@@ -76,27 +105,13 @@ plt.title('Daily patron counts (global trend) in ' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], patrons_detrended)
+plt.plot(patrons_and_earnings_df["date"], patrons_detrended, label='detrended', color='blue')
+plt.plot(patrons_and_earnings_df["date"], patrons_denoised, label='de-noised, upper envelope', color='red')
+#plt.plot(patrons_and_earnings_df["date"], patrons_peaks, label='smoothed peaks', color='orange')
+plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'green', label = 'release')
 plt.xlabel('date')
 plt.ylabel('paid members')
-plt.title('Daily patron counts (detrended) in ' + time_context)
+plt.title('Daily patron counts (with and without monthly dips) in ' + time_context)
 figureNo += 1
-
-plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], patrons_residual)
-plt.xlabel('date')
-plt.ylabel('paid members')
-plt.title('Daily patron counts (residual) in ' + time_context)
-figureNo += 1
-
-# patrons_and_earnings_df = patrons_and_earnings_df.set_index('date')
-# monthly_ts = patrons_and_earnings_df['paid_members'].resample('M').mean()
-# monthly_ts.plot(title='Monthly average paid members (time series)')
-
-# plt.figure(2)
-# plt.plot(patrons_and_earnings_df["date"], patrons_and_earnings_df["daily_earnings"])
-# plt.xlabel('date')
-# plt.ylabel('daily earnings')
-# plt.title('Daily revenue in' + time_context)
 
 plt.show()
