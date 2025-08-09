@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import scipy.signal as sig
 from scipy.ndimage import grey_closing
 import cloudscraper, re, json
+import math
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
@@ -27,7 +28,7 @@ patrons_and_earnings_df["date"] = pd.to_datetime(patrons_and_earnings_df["timest
 time_context = "all time"
 
 if LASTNDAYS > 0:
-    patrons_and_earnings_df = patrons_and_earnings_df.tail(LASTNDAYS)
+    patrons_and_earnings_df = patrons_and_earnings_df.tail(LASTNDAYS).reset_index(drop=True)
     time_context = "the last " + str(LASTNDAYS) + " days"
 
 # put the cutoff-frequency somewhere very low for the global trend
@@ -47,37 +48,18 @@ patrons_denoised = grey_closing(patrons_detrended, size=monthly_dip_window)
 peak_width = 4
 peaks_idx_raw,_ = sig.find_peaks(patrons_denoised, width = peak_width)  
 
-peaks_idx = []
-peak_no = 0
-
-seasonal_fc_norm = (1 / (35)) / (0.5) # monthly dips happen every 30 days, so we plug that into our new cutoff-frequency
-print("Seasonal cutoff freq: " + str(seasonal_fc_norm))
-lp_b, lp_a = sig.cheby2(N=6, rs=40, Wn = seasonal_fc_norm)
-
-patrons_peaks = sig.filtfilt(lp_b, lp_a, patrons_denoised)
-
-def get_slope(center, radius, data):
-    left = center - radius
-    right = center + radius 
-    slope = (data[right] - data[left]) / (right - left)
-    return slope
-
-# potentially filter out start and end maxima and any stray ones in between
-for peak_idx in peaks_idx_raw:
-    peak_no += 1
-    zero_slope_thrs = 0.1
-
-    radius = int(peak_width / 2) 
-    left = peak_idx - radius
-    right = peak_idx + radius
-
-    left_slope = get_slope(left, 1, patrons_peaks)
-    right_slope = get_slope(right, 1, patrons_peaks)
-    print("slopes around peak # " + str(peak_no) + ": " + str(left_slope) + " : " + str(right_slope))
-    if np.sign(left_slope) != np.sign(right_slope):
-        peaks_idx.append(peak_idx)
-
 peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idx_raw]
+
+# slice up the data into inter-release segments
+starts = peaks_idx_raw[:-1]
+ends   = np.r_[starts[1:], peaks_idx_raw[len(peaks_idx_raw) - 1]]  
+
+print("starts")
+print(starts)
+print("ends")
+print(ends)
+
+patrons_segments = [patrons_denoised[s:e] for s, e in zip(starts, ends)]
 
 domain_length = patrons_and_earnings_df["date"].size
 
@@ -113,5 +95,22 @@ plt.xlabel('date')
 plt.ylabel('paid members')
 plt.title('Daily patron counts (with and without monthly dips) in ' + time_context)
 figureNo += 1
+
+plt.figure(figureNo)
+n_segments = len(patrons_segments)
+
+n_cols = math.ceil(math.sqrt(n_segments))
+n_rows = math.ceil(n_segments / n_cols)
+subplot_no = 0
+
+for segment in patrons_segments:
+    index = subplot_no
+    subplot_no += 1
+    plt.subplot(n_rows, n_cols, subplot_no)
+    plt.plot(patrons_and_earnings_df["date"].iloc[starts[index] : ends[index]], segment)
+    plt.title('Idle window of ' + str(ends[index] - starts[index]) + " days")
+    plt.xticks(rotation=90, fontweight='light',  fontsize='x-small')
+
+plt.subplots_adjust(hspace= 0.25 * n_rows)
 
 plt.show()
