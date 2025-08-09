@@ -10,6 +10,16 @@ import math
 URL = "https://graphtreon.com/creator/lazytarts"
 LASTNDAYS = 2 * 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
 
+START_DATE = pd.to_datetime("2017-02-07")
+END_DATE = pd.to_datetime("2025-03-01")
+
+releases = []
+with open("releases.json", "r") as f:
+    releases = json.load(f)
+
+releases_df = pd.DataFrame(releases, columns=["version", "date", "price"])
+releases_df["date"] = pd.to_datetime(releases_df["date"])
+
 scraper = cloudscraper.create_scraper()     
 html     = scraper.get(URL, timeout=30).text
 daily_patrons_pattern  = re.compile( r'dailyGraph_patronSeriesData\s*=\s*(\[[\s\S]*?\])\s*;', re.DOTALL | re.DOTALL)
@@ -23,13 +33,27 @@ daily_earning_series = json.loads(daily_earnings_raw.group(1))
 
 patrons_and_earnings_df = pd.DataFrame(daily_patrons_series, columns=["timestamp_ms", "paid_members"])
 patrons_and_earnings_df["daily_earnings"] = pd.Series([v[1] for v in daily_earning_series])
-patrons_and_earnings_df["date"] = pd.to_datetime(patrons_and_earnings_df["timestamp_ms"], unit="ms", utc=True).dt.date
+patrons_and_earnings_df["date"] = pd.to_datetime(patrons_and_earnings_df["timestamp_ms"], unit="ms")
 
-time_context = "all time"
+patrons_and_earnings_df["month"] = patrons_and_earnings_df["date"].dt.to_period("M") 
+
+time_context = " in all time"
 
 if LASTNDAYS > 0:
-    patrons_and_earnings_df = patrons_and_earnings_df.tail(LASTNDAYS).reset_index(drop=True)
-    time_context = "the last " + str(LASTNDAYS) + " days"
+    START_DATE = patrons_and_earnings_df["date"].iloc[-LASTNDAYS]
+    END_DATE = patrons_and_earnings_df["date"].iloc[-1]
+    time_context = " in the last " + str(LASTNDAYS) + " days"
+
+if START_DATE != END_DATE:
+    mask = (patrons_and_earnings_df["date"] >= START_DATE) & (patrons_and_earnings_df["date"] <= END_DATE)
+    patrons_and_earnings_df = patrons_and_earnings_df.loc[mask].reset_index(drop=True)
+
+    mask = (releases_df["date"] >= START_DATE) & (releases_df["date"] <= END_DATE)
+    releases_df = releases_df.loc[mask].reset_index(drop=True)
+
+    time_context = " from " + str(START_DATE) + " to " + str(END_DATE)
+
+
 
 # put the cutoff-frequency somewhere very low for the global trend
 global_fc_norm = (1 / (365 / 0.5)) / (0.5) 
@@ -39,6 +63,8 @@ lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 # global trend
 global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
 patrons_detrended = patrons_and_earnings_df['paid_members'] - global_trend
+
+print(patrons_and_earnings_df)
 
 # montly dips
 monthly_dip_window = 30
@@ -54,11 +80,6 @@ peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idx_raw]
 starts = peaks_idx_raw[:-1]
 ends   = np.r_[starts[1:], peaks_idx_raw[len(peaks_idx_raw) - 1]]  
 
-print("starts")
-print(starts)
-print("ends")
-print(ends)
-
 patrons_segments = [patrons_denoised[s:e] for s, e in zip(starts, ends)]
 
 domain_length = patrons_and_earnings_df["date"].size
@@ -67,8 +88,8 @@ min_patrons = patrons_detrended.min()
 max_patrons = patrons_detrended.max()
 
 print("Length: " + str(domain_length))
-print("Peaks in subs " + time_context + ":")
-print(peak_dates)
+#print("Peaks in subs " + time_context + ":")
+#print(peak_dates)
 
 figureNo = 1
 
@@ -76,24 +97,33 @@ plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], patrons_and_earnings_df["paid_members"])
 plt.xlabel('date')
 plt.ylabel('paid members')
-plt.title('Daily patron counts in ' + time_context)
+plt.title('Daily patron counts' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], global_trend)
 plt.xlabel('date')
 plt.ylabel('paid members')
-plt.title('Daily patron counts (global trend) in ' + time_context)
+plt.title('Daily patron counts (global trend)' + time_context)
 figureNo += 1
+
+price_colors = ['green', 'orange']
 
 plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], patrons_detrended, label='detrended', color='blue')
-plt.plot(patrons_and_earnings_df["date"], patrons_denoised, label='de-noised, upper envelope', color='red')
+plt.plot(patrons_and_earnings_df["date"], patrons_denoised, label='de-noised, upper envelope', color='orange')
 #plt.plot(patrons_and_earnings_df["date"], patrons_peaks, label='smoothed peaks', color='orange')
-plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'green', label = 'release')
+plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'blue', linestyle=':', label = 'peaks')
+
+release_by_price = releases_df.groupby("price")
+color_idx = 0
+for price, group in release_by_price:
+    plt.vlines(x = group["date"], ymin = min_patrons, ymax = max_patrons, color = price_colors[color_idx], linestyle='--', label = str(price) + '$ release')
+    color_idx += 1
+    
 plt.xlabel('date')
 plt.ylabel('paid members')
-plt.title('Daily patron counts (with and without monthly dips) in ' + time_context)
+plt.title('Daily patron counts (with and without monthly dips)' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
@@ -102,6 +132,7 @@ n_segments = len(patrons_segments)
 n_cols = math.ceil(math.sqrt(n_segments))
 n_rows = math.ceil(n_segments / n_cols)
 subplot_no = 0
+
 
 for segment in patrons_segments:
     index = subplot_no
