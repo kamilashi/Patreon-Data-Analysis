@@ -8,10 +8,10 @@ import math
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
-LASTNDAYS = 2 * 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
+LASTNDAYS = 0#2 * 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
 
-START_DATE = pd.to_datetime("2017-02-07")
-END_DATE = pd.to_datetime("2025-03-01")
+START_DATE = pd.to_datetime("2022-07-01")
+END_DATE = pd.to_datetime("2024-05-01")
 
 releases = []
 with open("releases.json", "r") as f:
@@ -64,7 +64,6 @@ lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
 patrons_detrended = patrons_and_earnings_df['paid_members'] - global_trend
 
-print(patrons_and_earnings_df)
 
 # montly dips
 monthly_dip_window = 30
@@ -75,6 +74,7 @@ peak_width = 4
 peaks_idx_raw,_ = sig.find_peaks(patrons_denoised, width = peak_width)  
 
 peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idx_raw]
+print(peak_dates)
 
 # slice up the data into inter-release segments
 starts = peaks_idx_raw[:-1]
@@ -107,18 +107,18 @@ plt.ylabel('paid members')
 plt.title('Daily patron counts (global trend)' + time_context)
 figureNo += 1
 
-price_colors = ['green', 'orange']
+price_colors = ['orange', 'red']
 
 plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], patrons_detrended, label='detrended', color='blue')
 plt.plot(patrons_and_earnings_df["date"], patrons_denoised, label='de-noised, upper envelope', color='orange')
 #plt.plot(patrons_and_earnings_df["date"], patrons_peaks, label='smoothed peaks', color='orange')
-plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'blue', linestyle=':', label = 'peaks')
+plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'green', linestyle='--', label = 'peaks')
 
 release_by_price = releases_df.groupby("price")
 color_idx = 0
 for price, group in release_by_price:
-    plt.vlines(x = group["date"], ymin = min_patrons, ymax = max_patrons, color = price_colors[color_idx], linestyle='--', label = str(price) + '$ release')
+    plt.vlines(x = group["date"], ymin = min_patrons, ymax = max_patrons, color = price_colors[color_idx], linestyle=':', label = str(price) + '$ release')
     color_idx += 1
     
 plt.xlabel('date')
