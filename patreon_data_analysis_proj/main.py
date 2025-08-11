@@ -8,12 +8,13 @@ import math
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
-LASTNDAYS = 0 #2 * 365 # if > 0, only those last N dates will be processed. if = 0 all the dates will be processed. If < 0, START_DATE and END_DATE will be used
+LASTNDAYS = -1 #2 * 365 # if > 0, only those last N dates will be processed. if = 0 all the dates will be processed. If < 0, START_DATE and END_DATE will be used
 
-START_DATE = pd.to_datetime("2022-07-01")
-END_DATE = pd.to_datetime("2024-05-01")
+START_DATE = pd.to_datetime("2017-10-01") # pd.to_datetime("2022-07-01")
+END_DATE = pd.to_datetime("2025-07-01") # pd.to_datetime("2024-05-01")
 SEGMENT_INTER_RELEASE = True
 RELEASES_FILENAME = "releases_lt.json"
+SAVETABLES = True
 
 releases = []
 
@@ -61,7 +62,7 @@ if LASTNDAYS != 0 and START_DATE != END_DATE:
     releases_df = releases_df.loc[mask].reset_index(drop=True)
     
     if LASTNDAYS < 0:
-        time_context = " from " + str(START_DATE) + " to " + str(END_DATE)
+        time_context = " from " + str(START_DATE.date()) + " to " +str (END_DATE.date())
 
 # put the cutoff-frequency somewhere very low for the global trend
 global_fc_norm = (1 / (365 / 0.5)) / (0.5) 
@@ -93,7 +94,7 @@ for month, group in patrons_by_month:
     patrons_monthly.extend([payers] * len(group))
     prev_month_payers = payers
 
-monthly_stats_df = pd.DataFrame(monthly_churn, columns=["month", "churn rate (%)", "growth rate (%)"])
+monthly_stats_df = pd.DataFrame(monthly_churn, columns=["month", "churn rate", "growth rate"])
 monthly_stats_df.set_index("month", inplace=True)
 
 # remove montly dips for peak identitification
@@ -112,12 +113,10 @@ patrons_segments = []
 ends = []
 inter_release_df = pd.DataFrame()
 
-releases_df["per month count"] = releases_df.groupby("month")["month"].transform("count")
-release_months_df = releases_df.drop_duplicates(subset="month", keep="first").copy()
-release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[release_months_df["month"].to_numpy()]
-release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"].to_numpy()]
-
-print(release_months_df)
+releases_df["releases"] = releases_df.groupby("month")["month"].transform("count")
+release_months_df = releases_df.drop_duplicates(subset="month", keep="first").copy().drop(columns=["title", "price"])
+release_months_df["churn rate"]  = release_months_df["month"].map(monthly_stats_df["churn rate"])
+release_months_df["growth rate"] = release_months_df["month"].map(monthly_stats_df["growth rate"])
 
 if SEGMENT_INTER_RELEASE:
     release_window_start_dates =  pd.to_datetime(release_months_df["month"].iloc[1:-1].dt.to_timestamp(how="end").dt.normalize(), unit="ms")
@@ -148,15 +147,15 @@ if SEGMENT_INTER_RELEASE:
 
         months_between = (monthly_stats_df.index > start_month) & (monthly_stats_df.index < end_month)
 
-        segment_churn = monthly_stats_df["churn rate (%)"].loc[months_between]
-        segment_growths = monthly_stats_df["growth rate (%)"].loc[months_between]
+        segment_churn = monthly_stats_df["churn rate"].loc[months_between]
+        segment_growths = monthly_stats_df["growth rate"].loc[months_between]
 
         avg_churn  = segment_churn.mean()
         avg_growth = segment_growths.mean()
 
-        inter_release_stats.append([length, avg_churn, avg_growth, start_date, end_date, start_idx, end_idx])
+        inter_release_stats.append([length, avg_churn, avg_growth, start_month, end_month, start_idx, end_idx])
     
-    inter_release_df[["length", "avg churn", "avg growth","start date", "end date", "start_idx", "end_idx"]] = inter_release_stats
+    inter_release_df[["length", "avg churn", "avg growth", "from", "to", "start_idx", "end_idx"]] = inter_release_stats
 
     # releases made in consecutive months don't count as idle time
     mask = inter_release_df["length"] > 31 
@@ -171,13 +170,14 @@ max_patrons = patrons.max()
 
 print("Length: " + str(domain_length))
 
+
 figureNo = 1
 
 plt.figure(figureNo)
 plt.plot(patrons_and_earnings_df["date"], patrons_and_earnings_df["paid_members"])
 plt.xlabel('date')
 plt.ylabel('paid members')
-plt.title('Daily patron counts' + time_context)
+plt.title('Daily patron counts (raw)' + time_context)
 figureNo += 1
 
 plt.figure(figureNo)
@@ -190,8 +190,8 @@ figureNo += 1
 price_colors = ['orange', 'red']
 
 plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], patrons, label='raw patrons', color='blue')
-plt.plot(patrons_and_earnings_df["date"], patrons_monthly, label='monthly payers', color='orange')
+plt.plot(patrons_and_earnings_df["date"], patrons, label='raw patron count', color='blue')
+plt.plot(patrons_and_earnings_df["date"], patrons_monthly, label='billed patrons', color='orange')
 plt.vlines(x = releases_df["date"], ymin = min_patrons, ymax = max_patrons, color = 'green', linestyle='--', label = 'releases')
 plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'red', linestyle=':', label = 'peaks')
 
@@ -204,6 +204,7 @@ plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, co
 plt.xlabel('date')
 plt.ylabel('paid members')
 plt.title('Daily patron counts' + time_context)
+plt.legend()
 figureNo += 1
 
 
@@ -224,4 +225,21 @@ if SEGMENT_INTER_RELEASE:
 
     plt.subplots_adjust(hspace= 0.25 * n_rows)
 
+
 plt.show()
+
+
+if SAVETABLES:
+    release_months_df = releases_df.drop(columns=["date"])
+    inter_release_df = inter_release_df.drop(columns=["start_idx","end_idx"])
+
+    md_release = release_months_df.to_markdown(index=False, tablefmt="github", floatfmt=".2f")
+    md_idle = inter_release_df.to_markdown(index=False, tablefmt="github", floatfmt=".2f")
+
+    with open("../tables/release_t.md", "w", encoding="utf-8") as f:
+        f.write(md_release + "\n")
+
+    with open("../tables/inter_release_t.md", "w", encoding="utf-8") as f:
+        f.write(md_idle + "\n")
+
+    print("saved!")
