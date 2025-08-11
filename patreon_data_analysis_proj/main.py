@@ -48,18 +48,18 @@ patrons_and_earnings_df["month"] = patrons_and_earnings_df["date"].dt.to_period(
 
 time_context = " in all time"
 
-if LASTNDAYS >= 0:
+if LASTNDAYS > 0:
     START_DATE = patrons_and_earnings_df["date"].iloc[-LASTNDAYS]
     END_DATE = patrons_and_earnings_df["date"].iloc[-1]
     time_context = " in the last " + str(LASTNDAYS) + " days"
 
-if START_DATE != END_DATE:
+if LASTNDAYS != 0 and START_DATE != END_DATE:
     mask = (patrons_and_earnings_df["date"] >= START_DATE) & (patrons_and_earnings_df["date"] <= END_DATE)  
     patrons_and_earnings_df = patrons_and_earnings_df.loc[mask].reset_index(drop=True)                      
 
     mask = (releases_df["date"] >= START_DATE) & (releases_df["date"] <= END_DATE)
     releases_df = releases_df.loc[mask].reset_index(drop=True)
-
+    
     if LASTNDAYS < 0:
         time_context = " from " + str(START_DATE) + " to " + str(END_DATE)
 
