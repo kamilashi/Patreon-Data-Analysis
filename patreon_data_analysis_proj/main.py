@@ -230,7 +230,7 @@ plt.show()
 
 
 if SAVETABLES:
-    release_months_df = releases_df.drop(columns=["date"])
+    release_months_df = release_months_df.drop(columns=["date"])
     inter_release_df = inter_release_df.drop(columns=["start_idx","end_idx"])
 
     md_release = release_months_df.to_markdown(index=False, tablefmt="github", floatfmt=".2f")
