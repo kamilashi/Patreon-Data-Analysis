@@ -9,18 +9,18 @@ Tested is the assumption that in a subscription based model, people tend to unsu
 
 A general trend can be derive by applying a simple low-pass filter, with a very low cut-off frequency. 
 
-![raw patron graph](charts/Figure_2.png "Global trend")
+![global trend](charts/Figure_2.png "Global trend")
 *Project growth over the years*
 
 The patreon project under review uses the legacy [up-front billing system](https://support.patreon.com/hc/en-us/articles/8779192853261-Subscription-Billing-FAQ#h_01J446FNR0976JZJWG7EY3JFEY) - charged on subscription, then every 1st of the month. The monthly dips as explained by Patreon are the people who have unsubscribed the previous month being removed from the active patrons list. Knowing that, the active patron count can be boiled down to the maximum active patrons per month, since they are billed at least once upon subscribing.
 The derived peaks in patron counts (makred with red dotted lines) coincide with the releases (marked with green dashed lines).
 
-![raw patron graph](charts/Figure_3.png "Releases")
+![peaks and releases](charts/Figure_3.png "Releases")
 *Project update releases visualized against peaks in patron counts*
 
 One could get a closer look specifically at the idle months between the releases. For a period to be considered idle in this case, it needs to span at least one month.
 
-![raw patron graph](charts/Figure_4.png "Idle periods")
+![idle periods](charts/Figure_4.png "Idle periods")
 *Patron counts over idle months*
 
 Release months' stats, including churn and growth rates:
