@@ -7,7 +7,7 @@ Tested is the assumption that in a subscription based model, people tend to unsu
 ![raw patron graph](charts/Figure_1.png "Raw patron count")
 *Raw patron (subscriber) count*
 
-A general trend can be derive by applying a simple low-pass filter, with a very low cut-off frequency. 
+A general trend can be derived by applying a simple low-pass filter, with a very low cut-off frequency. 
 
 ![global trend](charts/Figure_2.png "Global trend")
 *Project growth over the years*
