@@ -8,11 +8,11 @@ import math
 
 
 URL = "https://graphtreon.com/creator/lazytarts"
-LASTNDAYS = 0 #2 * 365 # if > 0, only those last N dates will be processed. if <= 0 all the dates will be processed
+LASTNDAYS = 0 #2 * 365 # if > 0, only those last N dates will be processed. if = 0 all the dates will be processed. If < 0, START_DATE and END_DATE will be used
 
 START_DATE = pd.to_datetime("2022-07-01")
 END_DATE = pd.to_datetime("2024-05-01")
-SEGMENT_INTER_RELEASE = False
+SEGMENT_INTER_RELEASE = True
 RELEASES_FILENAME = "releases_lt.json"
 
 releases = []
@@ -24,6 +24,7 @@ if RELEASES_FILENAME != "":
 releases_df = pd.DataFrame(releases, columns=["date", "title", "price"])
 releases_df["date"] = pd.to_datetime(releases_df["date"])
 releases_df["month"] = releases_df["date"].dt.to_period("M") 
+releases_df = releases_df.sort_values(by='date')
 
 scraper = cloudscraper.create_scraper()     
 html     = scraper.get(URL, timeout=30).text
@@ -36,29 +37,31 @@ daily_earnings_raw = daily_earnings_pattern.search(html)
 daily_patrons_series = json.loads(daily_patrons_raw.group(1))
 daily_earning_series = json.loads(daily_earnings_raw.group(1))
 
+np.flipud(daily_patrons_series)
+np.flipud(daily_earning_series)
 patrons_and_earnings_df = pd.DataFrame(daily_patrons_series, columns=["timestamp_ms", "paid_members"])
 patrons_and_earnings_df["daily_earnings"] = pd.Series([v[1] for v in daily_earning_series])
 patrons_and_earnings_df["date"] = pd.to_datetime(patrons_and_earnings_df["timestamp_ms"], unit="ms")
+patrons_and_earnings_df = patrons_and_earnings_df.drop_duplicates(subset="date", keep="last")
 
 patrons_and_earnings_df["month"] = patrons_and_earnings_df["date"].dt.to_period("M") 
 
 time_context = " in all time"
 
-if LASTNDAYS > 0:
+if LASTNDAYS >= 0:
     START_DATE = patrons_and_earnings_df["date"].iloc[-LASTNDAYS]
     END_DATE = patrons_and_earnings_df["date"].iloc[-1]
     time_context = " in the last " + str(LASTNDAYS) + " days"
 
-if LASTNDAYS < 0 and START_DATE != END_DATE:
-    mask = (patrons_and_earnings_df["date"] >= START_DATE) & (patrons_and_earnings_df["date"] <= END_DATE)
-    patrons_and_earnings_df = patrons_and_earnings_df.loc[mask].reset_index(drop=True)
+if START_DATE != END_DATE:
+    mask = (patrons_and_earnings_df["date"] >= START_DATE) & (patrons_and_earnings_df["date"] <= END_DATE)  
+    patrons_and_earnings_df = patrons_and_earnings_df.loc[mask].reset_index(drop=True)                      
 
     mask = (releases_df["date"] >= START_DATE) & (releases_df["date"] <= END_DATE)
     releases_df = releases_df.loc[mask].reset_index(drop=True)
 
-    time_context = " from " + str(START_DATE) + " to " + str(END_DATE)
-
-
+    if LASTNDAYS < 0:
+        time_context = " from " + str(START_DATE) + " to " + str(END_DATE)
 
 # put the cutoff-frequency somewhere very low for the global trend
 global_fc_norm = (1 / (365 / 0.5)) / (0.5) 
@@ -67,8 +70,8 @@ lp_b, lp_a = sig.butter(N=4, Wn = global_fc_norm)
 
 # global trend
 global_trend = sig.filtfilt(lp_b, lp_a, patrons_and_earnings_df['paid_members'])
-patrons_and_earnings_df["detrended"] = patrons_and_earnings_df['paid_members'] #- global_trend
-patrons_detrended = patrons_and_earnings_df["detrended"] 
+patrons_and_earnings_df["detrended"] = patrons_and_earnings_df['paid_members'] - global_trend
+patrons = patrons_and_earnings_df['paid_members']
 
 # monthly churn
 patrons_monthly = []
@@ -77,7 +80,7 @@ prev_month_payers = 0
 patrons_by_month = patrons_and_earnings_df.groupby("month")
 
 for month, group in patrons_by_month:
-    payers = group["detrended"].max()
+    payers = group["paid_members"].max()
     if prev_month_payers == 0:
         net_change_rate = 0.0
     else:
@@ -93,66 +96,69 @@ for month, group in patrons_by_month:
 monthly_stats_df = pd.DataFrame(monthly_churn, columns=["month", "churn rate (%)", "growth rate (%)"])
 monthly_stats_df.set_index("month", inplace=True)
 
-# remove montly dips
-# monthly_dip_window = 30
-# patrons_denoised = grey_closing(patrons_detrended, size=monthly_dip_window)
+# remove montly dips for peak identitification
+monthly_dip_window = 30
+patrons_and_earnings_df['detrended'] = grey_closing(patrons_and_earnings_df['detrended'], size=monthly_dip_window)
 
 # peaks
-peak_width = 15 # 4
+peak_width = 4
 peaks_idxs,_ = sig.find_peaks(patrons_monthly, width = peak_width)  
 peak_dates = patrons_and_earnings_df["date"].iloc[peaks_idxs]
-print("peaks found:")
-print(peak_dates)
+print(str (len(peak_dates)) + " peaks found.")
 
 # slice up the data into inter-release segments
-
 starts = []
 ends = []
 inter_release_df = pd.DataFrame()
 
+releases_df["per month count"] = releases_df.groupby("month")["month"].transform("count")
+release_months_df = releases_df.drop_duplicates(subset="month", keep="first").copy()
+release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[release_months_df["month"]]
+release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"]]
+
+#print(releases_df)
+print(patrons_and_earnings_df.to_string(index=True)) 
+
 if SEGMENT_INTER_RELEASE:
     lookup = pd.Series(np.arange(len(patrons_and_earnings_df)), index=patrons_and_earnings_df["date"])
-    release_idxs = lookup.reindex(releases_df["date"]).to_numpy() 
+    release_idxs = lookup.reindex(release_months_df["date"]).to_numpy() 
     release_idxs = np.sort(release_idxs)
+    
+    print(release_idxs)
 
     starts = release_idxs[:-1]
-    ends   = np.r_[starts[1:], release_idxs[len(release_idxs) - 1]]  
-
+    ends   = np.r_[starts[1:], release_idxs[len(release_idxs) - 1]]
     idle_periods = ends - starts
 
     inter_release_df["length"] = idle_periods
-    inter_release_df["start month"] = patrons_and_earnings_df["month"].iloc[starts].to_numpy()  
-    inter_release_df["end month"] = patrons_and_earnings_df["month"].iloc[ends].to_numpy()  
-    #patrons_segments = [ for s, e in zip(starts, ends)]
+    inter_release_df["start date"] = patrons_and_earnings_df["date"].iloc[starts].to_numpy()  
+    inter_release_df["end date"] = patrons_and_earnings_df["date"].iloc[ends].to_numpy()  
 
     inter_release_stats = []
     for start_idx, end_idx in zip(starts, ends):
-
+        
         patrons_segments = patrons_monthly[start_idx : end_idx]
 
         start_month = patrons_and_earnings_df["month"].iloc[start_idx]
         end_month   = patrons_and_earnings_df["month"].iloc[end_idx]
 
-        months_in_segment = (monthly_stats_df.index >= start_month) & (monthly_stats_df.index < end_month)
+        if start_month != end_month:
+            months_between = (monthly_stats_df.index > start_month) & (monthly_stats_df.index < end_month)
 
-        segment_churn = monthly_stats_df["churn rate (%)"].loc[months_in_segment]
-        segment_growths = monthly_stats_df["growth rate (%)"].loc[months_in_segment]
+            segment_churn = monthly_stats_df["churn rate (%)"].loc[months_between]
+            segment_growths = monthly_stats_df["growth rate (%)"].loc[months_between]
 
-        avg_churn  = segment_churn.mean()
-        avg_growth = segment_growths.mean()
+            avg_churn  = segment_churn.mean()
+            avg_growth = segment_growths.mean()
 
-        print(months_in_segment)
-
-        inter_release_stats.append([avg_churn, avg_growth])
+            inter_release_stats.append([avg_churn, avg_growth])
     
     inter_release_df[["avg churn", "avg growth"]] = inter_release_stats
 
-print(inter_release_df)
-
 domain_length = patrons_and_earnings_df["date"].size
 
-min_patrons = patrons_detrended.min()
-max_patrons = patrons_detrended.max()
+min_patrons = patrons.min()
+max_patrons = patrons.max()
 
 print("Length: " + str(domain_length))
 
@@ -175,8 +181,8 @@ figureNo += 1
 price_colors = ['orange', 'red']
 
 plt.figure(figureNo)
-plt.plot(patrons_and_earnings_df["date"], patrons_detrended, label='detrended', color='blue')
-plt.plot(patrons_and_earnings_df["date"], patrons_monthly, label='payees', color='orange')
+plt.plot(patrons_and_earnings_df["date"], patrons, label='raw patrons', color='blue')
+plt.plot(patrons_and_earnings_df["date"], patrons_monthly, label='monthly payers', color='orange')
 plt.vlines(x = releases_df["date"], ymin = min_patrons, ymax = max_patrons, color = 'green', linestyle='--', label = 'releases')
 plt.vlines(x = peak_dates.to_numpy(), ymin = min_patrons, ymax = max_patrons, color = 'red', linestyle=':', label = 'peaks')
 
