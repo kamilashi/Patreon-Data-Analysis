@@ -114,51 +114,58 @@ inter_release_df = pd.DataFrame()
 
 releases_df["per month count"] = releases_df.groupby("month")["month"].transform("count")
 release_months_df = releases_df.drop_duplicates(subset="month", keep="first").copy()
-release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[release_months_df["month"]]
-release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"]]
+release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[release_months_df["month"].to_numpy()]
+release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"].to_numpy()]
 
-#print(releases_df)
+print(release_months_df)
 #print(patrons_and_earnings_df.to_string(index=True)) 
 
 if SEGMENT_INTER_RELEASE:
-    p_dates = pd.to_datetime(patrons_and_earnings_df["date"], utc=True).dt.tz_convert(None).dt.normalize()
-    r_dates = pd.to_datetime(release_months_df["date"],       utc=True).dt.tz_convert(None).dt.normalize()
+    release_window_start_dates =  pd.to_datetime(release_months_df["month"].iloc[1:-1].dt.to_timestamp(how="end").dt.normalize(), unit="ms")
+    release_window_end_dates  = pd.to_datetime(release_months_df["month"].iloc[2:].dt.to_timestamp(how="start").dt.normalize(), unit="ms")
 
-    idx = pd.DatetimeIndex(p_dates) 
-    release_idxs = idx.get_indexer(r_dates, method="pad")
-    
+    release_window_start_dates = release_window_start_dates.reset_index(drop=True)
+    release_window_end_dates = release_window_end_dates.reset_index(drop=True)
 
-    starts = release_idxs[:-1]
-    ends   = np.r_[starts[1:], release_idxs[len(release_idxs) - 1]]
-    idle_periods = ends - starts
+    p_dates = pd.to_datetime(patrons_and_earnings_df["date"],  utc=True).dt.tz_convert(None).dt.normalize()
 
-    print(starts)
-    print(ends)
+    lookup = pd.Series(np.arange(len(p_dates)), index=p_dates)
 
-    inter_release_df["length"] = idle_periods
-    inter_release_df["start date"] = patrons_and_earnings_df["date"].iloc[starts].to_numpy()  
-    inter_release_df["end date"] = patrons_and_earnings_df["date"].iloc[ends].to_numpy()  
+    idx = pd.DatetimeIndex(p_dates)  # sorted
+    starts = idx.get_indexer(release_window_start_dates, method="pad")
+    starts -= 1
+    ends   = lookup.reindex(release_window_end_dates).to_numpy()
 
     inter_release_stats = []
     for start_idx, end_idx in zip(starts, ends):
         
-        patrons_segments.append(patrons_monthly[start_idx : end_idx])
+        length = end_idx - start_idx
+
+        # patrons_segment = patrons_monthly[start_idx : end_idx]
 
         start_month = patrons_and_earnings_df["month"].iloc[start_idx]
         end_month   = patrons_and_earnings_df["month"].iloc[end_idx]
 
-        if start_month != end_month:
-            months_between = (monthly_stats_df.index > start_month) & (monthly_stats_df.index < end_month)
+        start_date = patrons_and_earnings_df["date"].iloc[start_idx]
+        end_date = patrons_and_earnings_df["date"].iloc[end_idx]
 
-            segment_churn = monthly_stats_df["churn rate (%)"].loc[months_between]
-            segment_growths = monthly_stats_df["growth rate (%)"].loc[months_between]
+        months_between = (monthly_stats_df.index > start_month) & (monthly_stats_df.index < end_month)
 
-            avg_churn  = segment_churn.mean()
-            avg_growth = segment_growths.mean()
+        segment_churn = monthly_stats_df["churn rate (%)"].loc[months_between]
+        segment_growths = monthly_stats_df["growth rate (%)"].loc[months_between]
 
-            inter_release_stats.append([avg_churn, avg_growth])
+        avg_churn  = segment_churn.mean()
+        avg_growth = segment_growths.mean()
+
+        inter_release_stats.append([length, avg_churn, avg_growth, start_date, end_date, start_idx, end_idx])
     
-    inter_release_df[["avg churn", "avg growth"]] = inter_release_stats
+    inter_release_df[["length", "avg churn", "avg growth","start date", "end date", "start_idx", "end_idx"]] = inter_release_stats
+
+    # releases made in consecutive months don't count as idle time
+    mask = inter_release_df["length"] > 31 
+    inter_release_df = inter_release_df.loc[mask].reset_index(drop=True)  
+    starts = inter_release_df["start_idx"].to_numpy()           
+    ends = inter_release_df["end_idx"].to_numpy()           
 
 domain_length = patrons_and_earnings_df["date"].size
 
@@ -205,17 +212,16 @@ figureNo += 1
 
 if SEGMENT_INTER_RELEASE:
     plt.figure(figureNo)
-    n_segments = len(patrons_segments)
+    n_segments = len(inter_release_df)
 
     n_cols = math.ceil(math.sqrt(n_segments))
     n_rows = math.ceil(n_segments / n_cols)
     subplot_no = 0
 
-    for segment in patrons_segments:
-        index = subplot_no
+    for index in range(n_segments):
         subplot_no += 1
         plt.subplot(n_rows, n_cols, subplot_no)
-        plt.plot(patrons_and_earnings_df["date"].iloc[starts[index] : ends[index]], segment)
+        plt.plot(patrons_and_earnings_df["date"].iloc[starts[index] : ends[index]], patrons_monthly[starts[index] : ends[index]])
         plt.title('Idle window of ' + str(inter_release_df["length"].iloc[index]) + " days")
         plt.xticks(rotation=90, fontweight='light',  fontsize='x-small')
 
