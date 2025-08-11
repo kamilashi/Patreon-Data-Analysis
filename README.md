@@ -20,7 +20,7 @@ The derived peaks in patron counts (makred with red dotted lines) coincide with 
 
 One could get a closer look specifically at the idle months between the releases. For a period to be considered idle in this case, it needs to span at least one month.
 
-![raw patron graph](charts/Figure_3.png "Idle periods")
+![raw patron graph](charts/Figure_4.png "Idle periods")
 *Patron counts over idle months*
 
 Release months' stats, including churn and growth rates:
