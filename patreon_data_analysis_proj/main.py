@@ -108,6 +108,7 @@ print(str (len(peak_dates)) + " peaks found.")
 
 # slice up the data into inter-release segments
 starts = []
+patrons_segments = []
 ends = []
 inter_release_df = pd.DataFrame()
 
@@ -117,18 +118,22 @@ release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[rel
 release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"]]
 
 #print(releases_df)
-print(patrons_and_earnings_df.to_string(index=True)) 
+#print(patrons_and_earnings_df.to_string(index=True)) 
 
 if SEGMENT_INTER_RELEASE:
-    lookup = pd.Series(np.arange(len(patrons_and_earnings_df)), index=patrons_and_earnings_df["date"])
-    release_idxs = lookup.reindex(release_months_df["date"]).to_numpy() 
-    release_idxs = np.sort(release_idxs)
+    p_dates = pd.to_datetime(patrons_and_earnings_df["date"], utc=True).dt.tz_convert(None).dt.normalize()
+    r_dates = pd.to_datetime(release_months_df["date"],       utc=True).dt.tz_convert(None).dt.normalize()
+
+    idx = pd.DatetimeIndex(p_dates) 
+    release_idxs = idx.get_indexer(r_dates, method="pad")
     
-    print(release_idxs)
 
     starts = release_idxs[:-1]
     ends   = np.r_[starts[1:], release_idxs[len(release_idxs) - 1]]
     idle_periods = ends - starts
+
+    print(starts)
+    print(ends)
 
     inter_release_df["length"] = idle_periods
     inter_release_df["start date"] = patrons_and_earnings_df["date"].iloc[starts].to_numpy()  
@@ -137,7 +142,7 @@ if SEGMENT_INTER_RELEASE:
     inter_release_stats = []
     for start_idx, end_idx in zip(starts, ends):
         
-        patrons_segments = patrons_monthly[start_idx : end_idx]
+        patrons_segments.append(patrons_monthly[start_idx : end_idx])
 
         start_month = patrons_and_earnings_df["month"].iloc[start_idx]
         end_month   = patrons_and_earnings_df["month"].iloc[end_idx]
