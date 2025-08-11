@@ -118,7 +118,6 @@ release_months_df["churn rate (%)"] = monthly_stats_df["churn rate (%)"].loc[rel
 release_months_df["growth rate (%)"] = monthly_stats_df["growth rate (%)"].loc[release_months_df["month"].to_numpy()]
 
 print(release_months_df)
-#print(patrons_and_earnings_df.to_string(index=True)) 
 
 if SEGMENT_INTER_RELEASE:
     release_window_start_dates =  pd.to_datetime(release_months_df["month"].iloc[1:-1].dt.to_timestamp(how="end").dt.normalize(), unit="ms")
@@ -140,8 +139,6 @@ if SEGMENT_INTER_RELEASE:
     for start_idx, end_idx in zip(starts, ends):
         
         length = end_idx - start_idx
-
-        # patrons_segment = patrons_monthly[start_idx : end_idx]
 
         start_month = patrons_and_earnings_df["month"].iloc[start_idx]
         end_month   = patrons_and_earnings_df["month"].iloc[end_idx]
